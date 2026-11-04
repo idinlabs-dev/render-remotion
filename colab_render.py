@@ -38,7 +38,7 @@ def get_token():
 
 def install_system():
     run(["bash", "-lc", "sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg libnss3 libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 libasound2t64 libxrandr2 libxkbcommon-x11-0 libxfixes3 libxcomposite1 libxdamage1 libgbm-dev libcups2 libpango-1.0-0 libcairo2 unzip curl"])
-    run(["bash", "-lc", "if ! command -v node >/dev/null || [[ "$(node -v | sed 's/v//' | cut -d. -f1)" -lt 20 ]]; then curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y -qq nodejs; fi"])
+    run(["bash", "-lc", "if ! command -v node >/dev/null; then curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y -qq nodejs; fi"])
 
 def download_project(token):
     import requests
