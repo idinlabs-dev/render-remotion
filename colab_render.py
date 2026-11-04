@@ -5,10 +5,10 @@ Cara pakai di Colab:
   %run colab_render.py
 
 Sebelum menjalankan, pilih Runtime -> Change runtime type -> T4 GPU.
-Saat script berjalan, masukkan GitHub Personal Access Token pada prompt.
+Repository public, jadi tidak perlu token GitHub.
 """
 from __future__ import annotations
-import getpass, io, json, os, pathlib, re, shutil, subprocess, sys, time, zipfile
+import io, json, os, pathlib, re, shutil, subprocess, sys, time, zipfile
 
 # ====== UBAH BAGIAN INI JIKA PERLU ======
 REPO = os.environ.get("RENDER_REPO", "idinlabs-dev/render-remotion")
@@ -34,18 +34,7 @@ def run(cmd, **kwargs):
         raise subprocess.CalledProcessError(code, cmd)
 
 def get_token():
-    token = os.environ.get("GITHUB_TOKEN", "")
-    if not token:
-        try:
-            from google.colab import userdata
-            token = userdata.get("GITHUB_TOKEN") or ""
-        except Exception:
-            pass
-    if not token:
-        token = getpass.getpass("Masukkan GitHub Personal Access Token: ").strip()
-    if not token:
-        raise RuntimeError("GitHub token kosong.")
-    return token
+    return os.environ.get("GITHUB_TOKEN", "")
 
 def install_system():
     run(["bash", "-lc", "sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg libnss3 libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 libasound2t64 libxrandr2 libxkbcommon-x11-0 libxfixes3 libxcomposite1 libxdamage1 libgbm-dev libcups2 libpango-1.0-0 libcairo2 unzip curl"])
@@ -56,7 +45,10 @@ def download_project(token):
     if ROOT.exists(): shutil.rmtree(ROOT)
     PROJECT_ROOT.mkdir(parents=True)
     url = f"https://api.github.com/repos/{REPO}/contents/projects/{PROJECT}.zip?ref={BRANCH}"
-    response = requests.get(url, headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.raw"}, timeout=120)
+    headers = {"Accept": "application/vnd.github.raw"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    response = requests.get(url, headers=headers, timeout=120)
     response.raise_for_status()
     with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
         archive.extractall(PROJECT_ROOT)
