@@ -22,7 +22,16 @@ PROJECT_ROOT = ROOT / "project"
 
 def run(cmd, **kwargs):
     print("$", " ".join(map(str, cmd)))
-    subprocess.run(cmd, check=True, **kwargs)
+    kwargs.setdefault("text", True)
+    kwargs.setdefault("bufsize", 1)
+    kwargs.setdefault("env", {**os.environ, "PYTHONUNBUFFERED": "1"})
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **kwargs)
+    assert process.stdout is not None
+    for line in process.stdout:
+        print(line, end="", flush=True)
+    code = process.wait()
+    if code != 0:
+        raise subprocess.CalledProcessError(code, cmd)
 
 def get_token():
     token = os.environ.get("GITHUB_TOKEN", "")
@@ -85,12 +94,16 @@ def main():
     install_system()
     project_root = download_project(token)
     print("Project root:", project_root)
-    run(["npm", "install", "--no-audit", "--no-fund"], cwd=project_root)
+    print("\n=== INSTALL DEPENDENCY PROJECT ===", flush=True)
+    run(["npm", "install", "--no-audit", "--no-fund", "--loglevel", "info"], cwd=project_root)
+    print("\n=== SIAPKAN BROWSER REMOTION ===", flush=True)
     run(["npx", "remotion", "browser", "ensure"], cwd=project_root)
     entry, composition, extra = detect(project_root)
+    print(f"\n=== KOMPOSISI TERPILIH: {composition} ===", flush=True)
     output = project_root / "out" / f"{PROJECT}.mp4"
     output.parent.mkdir(exist_ok=True)
-    command = ["npx", "remotion", "render", entry, composition, str(output), "--codec=h264", "--gl=angle", "--concurrency=2"] + [str(x) for x in extra]
+    command = ["npx", "remotion", "render", entry, composition, str(output), "--codec=h264", "--gl=angle", "--concurrency=2", "--log=verbose"] + [str(x) for x in extra]
+    print("\n=== MULAI RENDER — LOG REAL-TIME ===", flush=True)
     run(command, cwd=project_root)
     if not output.exists() or output.stat().st_size == 0:
         raise RuntimeError("Render selesai tetapi file MP4 tidak ditemukan")
