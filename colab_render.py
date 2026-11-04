@@ -5,10 +5,10 @@ Cara pakai di Colab:
   %run colab_render.py
 
 Sebelum menjalankan, pilih Runtime -> Change runtime type -> T4 GPU.
-Buat Colab Secret bernama GITHUB_TOKEN untuk repository private.
+Saat script berjalan, masukkan GitHub Personal Access Token pada prompt.
 """
 from __future__ import annotations
-import io, json, os, pathlib, re, shutil, subprocess, sys, time, zipfile
+import getpass, io, json, os, pathlib, re, shutil, subprocess, sys, time, zipfile
 
 # ====== UBAH BAGIAN INI JIKA PERLU ======
 REPO = os.environ.get("RENDER_REPO", "idinlabs-dev/render-remotion")
@@ -33,7 +33,9 @@ def get_token():
         except Exception:
             pass
     if not token:
-        raise RuntimeError("Buat Colab Secret GITHUB_TOKEN terlebih dahulu.")
+        token = getpass.getpass("Masukkan GitHub Personal Access Token: ").strip()
+    if not token:
+        raise RuntimeError("GitHub token kosong.")
     return token
 
 def install_system():
