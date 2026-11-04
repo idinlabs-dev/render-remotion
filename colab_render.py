@@ -15,6 +15,7 @@ REPO = os.environ.get("RENDER_REPO", "idinlabs-dev/render-remotion")
 BRANCH = os.environ.get("RENDER_BRANCH", "main")
 PROJECT = os.environ.get("RENDER_PROJECT", "peter-episode1")
 COMPOSITION = os.environ.get("RENDER_COMPOSITION", "")
+CONCURRENCY = int(os.environ.get("RENDER_CONCURRENCY", "4"))
 # ========================================
 
 ROOT = pathlib.Path("/content/remotion-render")
@@ -94,7 +95,7 @@ def main():
     print(f"\n=== KOMPOSISI TERPILIH: {composition} ===", flush=True)
     output = project_root / "out" / f"{PROJECT}.mp4"
     output.parent.mkdir(exist_ok=True)
-    command = ["npx", "remotion", "render", entry, composition, str(output), "--codec=h264", "--gl=angle", "--concurrency=2", "--log=verbose"] + [str(x) for x in extra]
+    command = ["npx", "remotion", "render", entry, composition, str(output), "--codec=h264", "--gl=angle", f"--concurrency={CONCURRENCY}", "--log=verbose"] + [str(x) for x in extra]
     print("\n=== MULAI RENDER — LOG REAL-TIME ===", flush=True)
     run(command, cwd=project_root)
     if not output.exists() or output.stat().st_size == 0:
