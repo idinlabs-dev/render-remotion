@@ -3,18 +3,18 @@ name: Render Remotion Split
 on:
   push:
     paths:
-      - "projects/peter-episode1.zip"
+      - "projects/**"
       - ".github/workflows/render-remotion.yml"
   workflow_dispatch:
     inputs:
       project:
-        description: "Nama ZIP atau folder di projects/"
+        description: "Nama ZIP atau folder di projects/; kosong = otomatis pilih ZIP terbaru/berubah"
         required: false
-        default: "peter-episode1"
+        default: ""
       composition:
-        description: "ID composition"
+        description: "ID composition; kosong = baca render.json"
         required: false
-        default: "PeterEpisode1"
+        default: ""
 
 permissions:
   contents: write
@@ -33,12 +33,32 @@ jobs:
           node-version: 22
 
       - name: Prepare project
+        env:
+          REQUESTED_PROJECT: ${{ inputs.project }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_BEFORE: ${{ github.event.before }}
+          EVENT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          P="${{ inputs.project }}"
-          [ -n "$P" ] || P="peter-episode1"
+          P="${REQUESTED_PROJECT:-}"
           P="${P%.zip}"
+
+          if [ -z "$P" ] && [ "$EVENT_NAME" = "push" ]; then
+            changed=""
+            if [ -n "${EVENT_BEFORE:-}" ] && ! printf '%s' "$EVENT_BEFORE" | grep -q '^0\{40\}$'; then
+              changed=$(git diff --name-only "$EVENT_BEFORE" "$EVENT_SHA" -- 'projects/*.zip' || true)
+            fi
+            P=$(printf '%s\n' "$changed" | awk -F/ 'NF == 2 {sub(/\.zip$/, "", $2); print $2; exit}')
+          fi
+
+          if [ -z "$P" ]; then
+            P=$(find projects -maxdepth 1 -type f -name '*.zip' -printf '%T@ %f\n' | sort -nr | head -n 1 | sed 's/^[^ ]* //' | sed 's/\.zip$//')
+          fi
+
+          test -n "$P" || { echo 'Tidak ada project ZIP di projects/'; exit 1; }
+          printf '%s' "$P" | grep -Eq '^[A-Za-z0-9._-]+$' || { echo "Nama project tidak valid: $P"; exit 1; }
           mkdir -p work
+
           if [ -f "projects/$P.zip" ]; then
             rm -rf work/_tmp "work/$P"
             mkdir -p work/_tmp
@@ -51,11 +71,16 @@ jobs:
               test -n "$child"
               mv "$child" "work/$P"
             fi
-          else
+          elif [ -d "projects/$P" ]; then
             cp -r "projects/$P" "work/$P"
+          else
+            echo "Project tidak ditemukan: projects/$P.zip atau projects/$P"
+            exit 1
           fi
+
           test -f "work/$P/package.json"
           echo "P=$P" >> "$GITHUB_ENV"
+          echo "PROJECT=$P"
 
       - name: Install system libraries
         run: |
@@ -69,16 +94,18 @@ jobs:
           npx remotion browser ensure
 
       - name: Render split segments and concat
+        env:
+          REQUESTED_COMPOSITION: ${{ inputs.composition }}
         run: |
           set -euo pipefail
           cd "work/$P"
           cfg() { if [ -f render.json ]; then jq -r "$1" render.json 2>/dev/null || true; fi; }
           ENTRY=$(cfg '.entry // empty')
           [ -n "$ENTRY" ] || ENTRY="src/index.tsx"
-          COMP="${{ inputs.composition }}"
+          COMP="${REQUESTED_COMPOSITION:-}"
           [ -n "$COMP" ] || COMP=$(cfg '.composition // empty')
-          [ -n "$COMP" ] || COMP="PeterEpisode1"
-          FPS=30
+          [ -n "$COMP" ] || COMP="Main"
+          FPS=$(cfg '.fps // 30')
           DURATION=$(node -e "const t=require('./src/timing.json'); console.log(t.duration)")
           SEG=$(cfg '.segmentSeconds // 60')
           TOTAL=$(node -e "console.log(Math.ceil($DURATION*$FPS))")
@@ -91,7 +118,7 @@ jobs:
             end=$((start + CHUNK - 1))
             [ "$end" -lt "$TOTAL" ] || end=$((TOTAL - 1))
             file="out/parts/part-$(printf '%04d' "$i").mp4"
-            echo "Rendering frames $start-$end"
+            echo "Rendering $P / $COMP frames $start-$end"
             npx remotion render "$ENTRY" "$COMP" "$file" --codec=h264 --frames="$start-$end" --gl=swangle --timeout=120000
             test -s "$file"
             printf "file '%s'\n" "$(pwd)/$file" >> out/concat.txt
@@ -104,6 +131,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: render-peter-episode1
-          path: work/peter-episode1/out/peter-episode1.mp4
+          name: render-${{ env.P }}
+          path: work/${{ env.P }}/out/${{ env.P }}.mp4
+          if-no-files-found: error
           retention-days: 14
