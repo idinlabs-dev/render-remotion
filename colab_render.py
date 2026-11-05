@@ -95,7 +95,12 @@ def main():
     print(f"\n=== KOMPOSISI TERPILIH: {composition} ===", flush=True)
     output = project_root / "out" / f"{PROJECT}.mp4"
     output.parent.mkdir(exist_ok=True)
-    command = ["npx", "remotion", "render", entry, composition, str(output), "--codec=h264", "--gl=angle", f"--concurrency={CONCURRENCY}", "--log=verbose"] + [str(x) for x in extra]
+    # Script ini mengendalikan codec, renderer, concurrency, dan log. Abaikan
+    # argumen yang sama dari render.json agar tidak terkirim dua kali, misalnya
+    # --gl=angle bersama --gl=swangle.
+    owned_prefixes = ("--codec", "--gl", "--concurrency", "--log", "--timeout", "--frames")
+    safe_extra = [str(x) for x in extra if not str(x).startswith(owned_prefixes)]
+    command = ["npx", "remotion", "render", entry, composition, str(output), "--codec=h264", "--gl=angle", f"--concurrency={CONCURRENCY}", "--log=verbose"] + safe_extra
     print("\n=== MULAI RENDER — LOG REAL-TIME ===", flush=True)
     run(command, cwd=project_root)
     if not output.exists() or output.stat().st_size == 0:
